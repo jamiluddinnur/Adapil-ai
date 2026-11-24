@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum TierPaket {
+  PERSONAL
+  FRAKSI
+}
+
+enum TingkatParlemen {
+  DPRD_PROVINSI
+  DPRD_KABKOTA
+}
+
+enum LevelKewenangan {
+  PROVINSI
+  KAB_KOTA
+  PUSAT
+}
+
+enum StatusPokir {
+  PENDING
+  DIAJUKAN_POKIR
+  TEREALISASI
+}
+
+enum TargetForum {
+  BANGGAR
+  KOMISI
+}
+
+enum KategoriAnomali {
+  INFLASI_10_PLUS
+  LONJAKAN_20_PLUS
+  PEMOTONGAN_MODAL
+}
+
+model Workspace {
+  id                    String          @id @default(cuid())
+  nama_workspace        String
+  tier_paket            TierPaket       @default(PERSONAL)
+  tingkat_parlemen      TingkatParlemen @default(DPRD_KABKOTA)
+  nama_dewan_didampingi String
+  default_threshold_pct Float           @default(10.0)
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  users            User[]
+  resesAspirations ResesAspiration[]
+  pokirProposals   PokirProposal[]
+  budgetDocuments  BudgetDocument[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  workspaceId  String   @map("workspace_id")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  nama_ta      String
+  no_wa        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@map("password_reset_tokens")
+}
+
+model ResesAspiration {
+  id               String          @id @default(cuid())
+  workspaceId      String          @map("workspace_id")
+  nama_warga       String
+  no_hp_warga      String?
+  kabupaten        String
+  kecamatan        String
+  desa             String
+  sektor           String
+  uraian_aspirasi  String          @db.Text
+  level_kewenangan LevelKewenangan
+  status_pokir     StatusPokir     @default(PENDING)
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, kecamatan, sektor])
+  @@map("reses_aspirations")
+}
+
+model PokirProposal {
+  id                String   @id @default(cuid())
+  workspaceId       String   @map("workspace_id")
+  judul_usulan      String
+  dinas_tujuan      String
+  naskah_draf_resmi String   @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("pokir_proposals")
+}
+
+model BudgetDocument {
+  id             String      @id @default(cuid())
+  workspaceId    String      @map("workspace_id")
+  nama_file      String
+  target_forum   TargetForum
+  nama_mitra     String
+  tahun_anggaran String
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  anomalies BudgetAnomaly[]
+  briefs    HearingBrief[]
+
+  @@index([workspaceId])
+  @@map("budget_documents")
+}
+
+model BudgetAnomaly {
+  id              String          @id @default(cuid())
+  documentId      String          @map("document_id")
+  kode_rekening   String
+  uraian          String
+  nominal_lalu    BigInt
+  nominal_kini    BigInt
+  selisih_nominal BigInt
+  selisih_persen  Float
+  kategori_tag    KategoriAnomali
+
+  document BudgetDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("budget_anomalies")
+}
+
+model HearingBrief {
+  id                  String      @id @default(cuid())
+  documentId          String      @map("document_id")
+  target_forum        TargetForum
+  nama_mitra          String
+  ringkasan_eksekutif String      @db.Text
+  list_pertanyaan     Json
+  wa_formatted_text   String      @db.Text
+  createdAt           DateTime    @default(now()) @map("created_at")
+
+  document BudgetDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("hearing_briefs")
+}
